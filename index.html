@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Домашняя очередь</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --text: #25272b; --muted: #6a6f76; --line: #dedbd4;
+  --accent: #3d6a8a; --on-accent: #ffffff;
+  --done: #cfe5d2; --done-t: #25522d;
+  --part: #f1e3b3; --part-t: #5c4a10;
+  --miss: #efc9c4; --miss-t: #6b2620;
+  --future: #e6e6e3; --future-t: #5a5e64;
+  --warn-bg: #f6ecd0; --warn-t: #5c4a10;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17191c; --card: #212428; --text: #e6e7e9; --muted: #9aa0a8; --line: #343840;
+    --accent: #8db8d8; --on-accent: #12212c;
+    --done: #2a4a31; --done-t: #bfe3c6;
+    --part: #4d4220; --part-t: #ecdca0;
+    --miss: #54302d; --miss-t: #f1c4be;
+    --future: #2c2f34; --future-t: #aab0b8;
+    --warn-bg: #4d4220; --warn-t: #ecdca0;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.45 "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+main { max-width: 720px; margin: 0 auto; padding: 16px; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h2 { font-size: 1.05rem; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.greet { font-size: 1.15rem; font-weight: 500; margin: 0; }
+.sub { color: var(--muted); font-size: .9rem; margin: 2px 0 0; }
+.sub button { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; }
+.icon-btn { background: var(--card); border: 1px solid var(--line); border-radius: 8px; min-width: 44px; min-height: 44px; font-size: 1.1rem; }
+.notice { background: var(--warn-bg); color: var(--warn-t); border-radius: 8px; padding: 8px 12px; font-size: .88rem; margin-bottom: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.card h2 { margin-bottom: 8px; }
+.empty { color: var(--muted); margin: 0; }
+.btn { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 8px; min-height: 44px; padding: 8px 16px; font-weight: 500; }
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.welcome { text-align: center; padding: 24px 16px; }
+.welcome .names { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }
+.task { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.task:first-of-type { border-top: 0; }
+.task .name { font-weight: 500; }
+.task .who { color: var(--muted); font-size: .88rem; }
+.task .btn { min-width: 120px; }
+.task .state { color: var(--done-t); font-weight: 500; min-width: 120px; text-align: right; }
+@media (prefers-color-scheme: dark) { .task .state { color: #bfe3c6; } }
+.yearbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.yearbar strong { flex: 1; text-align: center; font-size: 1.1rem; }
+.months { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.month h3 { font-size: .9rem; margin-bottom: 4px; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dow { font-size: .7rem; color: var(--muted); text-align: center; }
+.day { aspect-ratio: 1; min-height: 28px; border: 2px solid transparent; border-radius: 6px; background: transparent; font-size: .78rem; padding: 0; }
+.day.s-done { background: var(--done); color: var(--done-t); }
+.day.s-part { background: var(--part); color: var(--part-t); }
+.day.s-miss { background: var(--miss); color: var(--miss-t); }
+.day.s-future { background: var(--future); color: var(--future-t); }
+.day.today { border-color: var(--text); }
+.day.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .78rem; color: var(--muted); margin-top: 12px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+.stat { margin-bottom: 12px; }
+.stat:last-child { margin-bottom: 0; }
+.stat .row { display: flex; justify-content: space-between; font-size: .95rem; }
+.bar { height: 8px; background: var(--future); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+.bar > span { display: block; height: 100%; }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 16px; }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.field { display: flex; gap: 6px; margin-bottom: 6px; }
+.field input[type=text] { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; background: var(--bg); color: var(--text); font: inherit; }
+.chore { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+.days { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.days button { min-width: 40px; min-height: 36px; border: 1px solid var(--line); border-radius: 6px; background: transparent; }
+.days button[aria-pressed=true] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.err { color: var(--miss-t); background: var(--miss); border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: .9rem; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.h3s { font-size: .9rem; margin: 12px 0 6px; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<dialog id="settings" aria-labelledby="set-h"></dialog>
+
+<script>
+'use strict';
+(function () {
+  var STORE_KEY = 'chores:v1';
+  var ME_KEY = 'chores:me';
+  var EPOCH = Date.UTC(2020, 0, 6); // понедельник
+  var WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  var MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  var MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  var COLORS = ['#3d6a8a', '#a0603c', '#5a8a5a', '#8a5a8a', '#b08a2e', '#4a8a8a', '#a04a5a', '#6a6aa0', '#7a8a3c', '#8a6a5a', '#3c7a9a', '#9a7a9a'];
+  var MAX_MEMBERS = 12, MAX_CHORES = 20, NAME_MAX = 30, CHORE_MAX = 50;
+
+  // ---------- Хранилище (локальный режим) ----------
+  var memStore = null;
+  var storageOk = true;
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        var d = JSON.parse(raw);
+        return { config: d.config || null, done: d.done || {} };
+      }
+    } catch (e) { storageOk = false; }
+    return memStore || { config: null, done: {} };
+  }
+  function save(data) {
+    memStore = data;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); storageOk = true; return true; }
+    catch (e) { storageOk = false; return false; }
+  }
+  function getMe() { try { return localStorage.getItem(ME_KEY); } catch (e) { return null; } }
+  function setMe(n) { try { if (n) localStorage.setItem(ME_KEY, n); else localStorage.removeItem(ME_KEY); } catch (e) {} }
+
+  // ---------- Даты и очередь ----------
+  var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+  var dkey = function (y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); };
+  function todayParts() { var t = new Date(); return { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() }; }
+  function dayNum(y, m, d) { return Math.round((Date.UTC(y, m, d) - EPOCH) / 86400000); }
+  function mod(a, n) { return ((a % n) + n) % n; }
+  function parseKey(k) { var p = k.split('-'); return { y: +p[0], m: +p[1] - 1, d: +p[2] }; }
+
+  // Список дел на дату с исполнителем: [{chore, who}]
+  function dayTasks(cfg, y, m, d) {
+    var dn = dayNum(y, m, d), wd = mod(dn, 7), out = [];
+    if (!cfg || !cfg.members.length) return out;
+    cfg.chores.forEach(function (c, idx) {
+      var days = c.days.slice().sort(function (a, b) { return a - b; });
+      if (days.indexOf(wd) < 0) return;
+      var before = days.filter(function (x) { return x < wd; }).length;
+      var occ = Math.floor(dn / 7) * days.length + before;
+      out.push({ chore: c, who: cfg.members[mod(occ + idx, cfg.members.length)] });
+    });
+    return out;
+  }
+
+  // ---------- Состояние ----------
+  var data = load();
+  var now = todayParts();
+  var state = { year: now.y, sel: dkey(now.y, now.m, now.d), forceWelcome: false, notice: '' };
+  var app = document.getElementById('app');
+  var dlg = document.getElementById('settings');
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function colorOf(name) {
+    var i = data.config ? data.config.members.indexOf(name) : 0;
+    return COLORS[Math.max(0, i) % COLORS.length];
+  }
+  function isDone(chore, y, m, d) { return !!data.done[chore.id + '_' + dkey(y, m, d)]; }
+
+  function statusOf(y, m, d) {
+    var tasks = dayTasks(data.config, y, m, d);
+    if (!tasks.length) return '';
+    var n = tasks.filter(function (t) { return isDone(t.chore, y, m, d); }).length;
+    if (n === tasks.length) return 's-done';
+    if (n > 0) return 's-part';
+    var diff = dayNum(y, m, d) - dayNum(now.y, now.m, now.d);
+    return diff < 0 ? 's-miss' : 's-future';
+  }
+
+  // ---------- Отрисовка ----------
+  function greeting(me) {
+    var h = new Date().getHours();
+    var part = h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
+    var mine = dayTasks(data.config, now.y, now.m, now.d).filter(function (t) { return t.who === me; });
+    var done = mine.filter(function (t) { return isDone(t.chore, now.y, now.m, now.d); }).length;
+    var line;
+    if (!mine.length) line = 'Сегодня на вас дел нет.';
+    else if (done === mine.length) line = 'Сегодня на вас дел: ' + mine.length + ', всё сделано. Спасибо!';
+    else line = 'Сегодня на вас дел: ' + mine.length + ', сделано: ' + done + '.';
+    return part + ', ' + esc(me) + '. ' + line;
+  }
+
+  function render() {
+    now = todayParts();
+    var cfg = data.config;
+    var me = getMe();
+    if (cfg && me && cfg.members.indexOf(me) < 0) { setMe(null); me = null; }
+    var html = '';
+
+    if (!cfg) {
+      html += '<div class="top"><h1 class="greet">Домашняя очередь</h1>' + settingsBtn() + '</div>' +
+        '<div class="card welcome"><h2>Начните с настроек</h2>' +
+        '<p class="empty">Добавьте людей и домашние дела, а очередь посчитается сама.</p>' +
+        '<p><button class="btn" data-act="settings">Открыть настройки</button></p></div>';
+    } else if (!me || state.forceWelcome) {
+      html += '<div class="card welcome"><h1>Добро пожаловать</h1>' +
+        '<p class="empty">Выберите своё имя. Оно закрепится за этим устройством.</p><div class="names">' +
+        cfg.members.map(function (n) {
+          return '<button class="btn ghost" data-act="pick" data-name="' + esc(n) + '"><span class="dot" style="background:' + colorOf(n) + '"></span>' + esc(n) + '</button>';
+        }).join('') + '</div></div>';
+    } else {
+      html += '<div class="top"><div><p class="greet">' + greeting(me) + '</p>' +
+        '<p class="sub"><button data-act="notme">Это не вы?</button></p></div>' + settingsBtn() + '</div>';
+      if (!storageOk) html += '<div class="notice" role="status">Браузер не даёт сохранять данные: после закрытия страницы всё пропадёт.</div>';
+      if (state.notice) html += '<div class="notice" role="alert">' + esc(state.notice) + '</div>';
+      html += '<div class="notice">Данные хранятся только в этом браузере и не видны другим устройствам.</div>';
+      html += dayCard(me) + calendarCard() + statsCard();
+    }
+    var focus = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-keep');
+    app.innerHTML = html;
+    if (focus) { var el = app.querySelector('[data-keep="' + focus + '"]'); if (el) el.focus(); }
+  }
+
+  function settingsBtn() {
+    return '<button class="icon-btn" data-act="settings" aria-label="Настройки">⚙</button>';
+  }
+
+  function dayCard(me) {
+    var p = parseKey(state.sel);
+    var tasks = dayTasks(data.config, p.y, p.m, p.d);
+    var diff = dayNum(p.y, p.m, p.d) - dayNum(now.y, now.m, now.d);
+    var wd = mod(dayNum(p.y, p.m, p.d), 7);
+    var title = (diff === 0 ? 'Сегодня, ' : '') + p.d + ' ' + MONTHS_GEN[p.m] + ' ' + p.y + ', ' + WD[wd].toLowerCase();
+    tasks.sort(function (a, b) { return (b.who === me) - (a.who === me); });
+    var h = '<section class="card" id="daycard" tabindex="-1"><h2>' + esc(title) + '</h2>';
+    if (!tasks.length) h += '<p class="empty">В этот день дел нет.</p>';
+    tasks.forEach(function (t) {
+      var done = isDone(t.chore, p.y, p.m, p.d);
+      var mine = t.who === me;
+      var right;
+      if (done) {
+        right = mine && diff <= 0
+          ? '<button class="btn ghost" data-act="toggle" data-id="' + t.chore.id + '" aria-label="Снять отметку: ' + esc(t.chore.name) + '">Сделано ✓</button>'
+          : '<span class="state">Сделано ✓</span>';
+      } else if (mine && diff <= 0) {
+        right = '<button class="btn" data-act="toggle" data-id="' + t.chore.id + '">Отметить</button>';
+      } else {
+        var why = diff > 0 ? 'Будущие дни отметить нельзя' : 'Отметить может ' + t.who;
+        right = '<button class="btn ghost" disabled title="' + esc(why) + '" aria-label="Не сделано. ' + esc(why) + '">Не сделано</button>';
+      }
+      h += '<div class="task"><div><div class="name">' + esc(t.chore.name) + '</div><div class="who"><span class="dot" style="background:' +
+        colorOf(t.who) + '"></span>' + esc(t.who) + (mine ? ' (вы)' : '') + '</div></div>' + right + '</div>';
+    });
+    return h + '</section>';
+  }
+
+  function calendarCard() {
+    var y = state.year;
+    var h = '<section class="card"><div class="yearbar">' +
+      '<button class="icon-btn" data-act="year" data-d="-1" aria-label="Предыдущий год">←</button>' +
+      '<strong>' + y + '</strong>' +
+      '<button class="icon-btn" data-act="year" data-d="1" aria-label="Следующий год">→</button>' +
+      '<button class="btn ghost" data-act="today">Сегодня</button></div><div class="months">';
+    for (var m = 0; m < 12; m++) {
+      var first = mod(dayNum(y, m, 1), 7);
+      var count = new Date(y, m + 1, 0).getDate();
+      h += '<div class="month"><h3>' + MONTHS[m] + '</h3><div class="grid">';
+      WD.forEach(function (w) { h += '<div class="dow">' + w + '</div>'; });
+      for (var i = 0; i < first; i++) h += '<div></div>';
+      for (var d = 1; d <= count; d++) {
+        var k = dkey(y, m, d);
+        var cls = 'day ' + statusOf(y, m, d);
+        if (y === now.y && m === now.m && d === now.d) cls += ' today';
+        if (k === state.sel) cls += ' sel';
+        h += '<button class="' + cls + '" data-act="day" data-k="' + k + '" aria-label="' + d + ' ' + MONTHS_GEN[m] + '">' + d + '</button>';
+      }
+      h += '</div></div>';
+    }
+    return h + '</div><div class="legend">' +
+      '<span><i style="background:var(--done)"></i>всё сделано</span><span><i style="background:var(--part)"></i>частично</span>' +
+      '<span><i style="background:var(--miss)"></i>пропущено</span><span><i style="background:var(--future)"></i>впереди</span></div></section>';
+  }
+
+  function statsCard() {
+    var cfg = data.config, y = state.year;
+    var stats = {};
+    cfg.members.forEach(function (n) { stats[n] = { a: 0, d: 0 }; });
+    var end = y < now.y ? new Date(y, 11, 31) : y === now.y ? new Date(now.y, now.m, now.d) : null;
+    if (end) {
+      for (var t = new Date(y, 0, 1); t <= end; t.setDate(t.getDate() + 1)) {
+        var yy = t.getFullYear(), mm = t.getMonth(), dd = t.getDate();
+        dayTasks(cfg, yy, mm, dd).forEach(function (x) {
+          stats[x.who].a++;
+          if (isDone(x.chore, yy, mm, dd)) stats[x.who].d++;
+        });
+      }
+    }
+    var h = '<section class="card"><h2>Статистика за ' + y + '</h2>';
+    cfg.members.forEach(function (n) {
+      var s = stats[n], pct = s.a ? Math.round(s.d * 100 / s.a) : 0;
+      h += '<div class="stat"><div class="row"><span><span class="dot" style="background:' + colorOf(n) + '"></span>' + esc(n) +
+        '</span><span>' + s.d + ' из ' + s.a + (s.a ? ' · ' + pct + '%' : '') + '</span></div>' +
+        '<div class="bar" role="img" aria-label="' + esc(n) + ': ' + pct + '%"><span style="width:' + pct + '%;background:' + colorOf(n) + '"></span></div></div>';
+    });
+    return h + '</section>';
+  }
+
+  // ---------- Настройки ----------
+  var draft = null;
+  function uid() { return 'c' + Math.random().toString(36).slice(2, 8); }
+
+  function openSettings() {
+    var cfg = data.config;
+    draft = cfg
+      ? { members: cfg.members.slice(), chores: cfg.chores.map(function (c) { return { id: c.id, name: c.name, days: c.days.slice() }; }) }
+      : { members: [''], chores: [
+          { id: uid(), name: 'Мыть посуду', days: [0, 1, 2, 3, 4, 5, 6] },
+          { id: uid(), name: 'Выносить мусор', days: [0, 2, 4] }
+        ] };
+    drawSettings('');
+    if (!dlg.open) dlg.showModal();
+  }
+
+  function drawSettings(err) {
+    var h = '<h2 id="set-h">Настройки</h2><div class="h3s">Люди (до ' + MAX_MEMBERS + ')</div>';
+    draft.members.forEach(function (n, i) {
+      h += '<div class="field"><input type="text" maxlength="' + NAME_MAX + '" value="' + esc(n) + '" data-m="' + i + '" aria-label="Имя ' + (i + 1) + '" placeholder="Имя">' +
+        '<button class="icon-btn" data-act="rm-member" data-i="' + i + '" aria-label="Удалить человека">✕</button></div>';
+    });
+    if (draft.members.length < MAX_MEMBERS) h += '<button class="btn ghost" data-act="add-member">+ Человек</button>';
+    h += '<div class="h3s">Дела (до ' + MAX_CHORES + ')</div>';
+    draft.chores.forEach(function (c, i) {
+      h += '<div class="chore"><div class="field"><input type="text" maxlength="' + CHORE_MAX + '" value="' + esc(c.name) + '" data-c="' + i + '" aria-label="Название дела ' + (i + 1) + '" placeholder="Название дела">' +
+        '<button class="icon-btn" data-act="rm-chore" data-i="' + i + '" aria-label="Удалить дело">✕</button></div><div class="days">';
+      WD.forEach(function (w, d) {
+        h += '<button type="button" data-act="day-toggle" data-i="' + i + '" data-d="' + d + '" aria-pressed="' + (c.days.indexOf(d) >= 0) + '">' + w + '</button>';
+      });
+      h += '</div></div>';
+    });
+    if (draft.chores.length < MAX_CHORES) h += '<button class="btn ghost" data-act="add-chore">+ Дело</button>';
+    if (err) h += '<div class="err" role="alert">' + esc(err) + '</div>';
+    h += '<p class="empty" style="font-size:.85rem;margin-top:12px">Очередь привязана к порядку в списке: если удалить или переставить людей, прошлые отметки могут оказаться у другого человека.</p>';
+    h += '<div class="actions"><button class="btn ghost" data-act="cancel">Отмена</button><button class="btn" data-act="save">Сохранить</button></div>';
+    dlg.innerHTML = h;
+  }
+
+  function syncDraft() {
+    dlg.querySelectorAll('[data-m]').forEach(function (el) { draft.members[+el.getAttribute('data-m')] = el.value; });
+    dlg.querySelectorAll('[data-c]').forEach(function (el) { draft.chores[+el.getAttribute('data-c')].name = el.value; });
+  }
+
+  function validate() {
+    var names = draft.members.map(function (n) { return n.trim(); }).filter(Boolean);
+    if (!names.length) return 'Добавьте хотя бы одно имя.';
+    var seen = {};
+    for (var i = 0; i < names.length; i++) {
+      var k = names[i].toLowerCase();
+      if (seen[k]) return 'Имена должны быть разными: «' + names[i] + '» повторяется.';
+      seen[k] = 1;
+    }
+    var chores = draft.chores.filter(function (c) { return c.name.trim(); });
+    if (!chores.length) return 'Добавьте хотя бы одно дело.';
+    for (var j = 0; j < chores.length; j++) {
+      if (!chores[j].days.length) return 'У дела «' + chores[j].name.trim() + '» не выбран ни один день недели.';
+    }
+    return '';
+  }
+
+  function saveSettings() {
+    syncDraft();
+    var err = validate();
+    if (err) return drawSettings(err);
+    var oldMe = getMe();
+    data.config = {
+      members: draft.members.map(function (n) { return n.trim(); }).filter(Boolean),
+      chores: draft.chores.filter(function (c) { return c.name.trim(); }).map(function (c) {
+        return { id: c.id, name: c.name.trim(), days: c.days.slice().sort(function (a, b) { return a - b; }) };
+      })
+    };
+    if (!save(data)) state.notice = 'Не удалось сохранить данные в браузере.';
+    else state.notice = '';
+    if (oldMe && data.config.members.indexOf(oldMe) < 0) setMe(null);
+    dlg.close();
+    render();
+  }
+
+  // ---------- События ----------
+  function selectDay(k) {
+    state.sel = k;
+    state.year = parseKey(k).y;
+  }
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-act]');
+    if (!el) return;
+    var act = el.getAttribute('data-act');
+    var inDlg = dlg.contains(el);
+    if (inDlg && act !== 'cancel' && act !== 'save') syncDraft();
+
+    switch (act) {
+      case 'settings': openSettings(); break;
+      case 'cancel': dlg.close(); break;
+      case 'save': saveSettings(); break;
+      case 'add-member': draft.members.push(''); drawSettings(''); break;
+      case 'rm-member': draft.members.splice(+el.getAttribute('data-i'), 1); drawSettings(''); break;
+      case 'add-chore': draft.chores.push({ id: uid(), name: '', days: [0, 1, 2, 3, 4, 5, 6] }); drawSettings(''); break;
+      case 'rm-chore': draft.chores.splice(+el.getAttribute('data-i'), 1); drawSettings(''); break;
+      case 'day-toggle':
+        var c = draft.chores[+el.getAttribute('data-i')], d = +el.getAttribute('data-d'), at = c.days.indexOf(d);
+        if (at >= 0) c.days.splice(at, 1); else c.days.push(d);
+        drawSettings('');
+        break;
+      case 'pick': setMe(el.getAttribute('data-name')); state.forceWelcome = false; render(); break;
+      case 'notme': state.forceWelcome = true; render(); break;
+      case 'year': state.year += +el.getAttribute('data-d'); render(); break;
+      case 'today':
+        state.year = now.y; selectDay(dkey(now.y, now.m, now.d)); render(); break;
+      case 'day':
+        selectDay(el.getAttribute('data-k')); render();
+        var card = document.getElementById('daycard');
+        if (card) card.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+        break;
+      case 'toggle':
+        var me = getMe(), id = el.getAttribute('data-id'), p = parseKey(state.sel);
+        var task = dayTasks(data.config, p.y, p.m, p.d).filter(function (t) { return t.chore.id === id; })[0];
+        if (!task || task.who !== me) break;
+        if (dayNum(p.y, p.m, p.d) > dayNum(now.y, now.m, now.d)) break;
+        var key = id + '_' + state.sel;
+        if (data.done[key]) delete data.done[key]; else data.done[key] = true;
+        state.notice = save(data) ? '' : 'Не удалось сохранить отметку. Попробуйте ещё раз.';
+        render();
+        break;
+    }
+  });
+
+  dlg.addEventListener('close', function () { draft = null; });
+
+  render();
+  // Обновляем «сегодня» при возврате на вкладку (например, наутро).
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && !dlg.open) {
+      var t = todayParts();
+      if (t.d !== now.d || t.m !== now.m) { state.sel = dkey(t.y, t.m, t.d); state.year = t.y; }
+      render();
+    }
+  });
+})();
+</script>
+</body>
+</html>
