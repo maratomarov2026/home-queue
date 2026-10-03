@@ -63,12 +63,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .task .state { color: var(--done-t); font-weight: 500; min-width: 120px; text-align: right; }
 @media (prefers-color-scheme: dark) { .task .state { color: #bfe3c6; } }
 .yearbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.yearbar strong { flex: 1; text-align: center; font-size: 1.1rem; }
-.months { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.yearbar strong { flex: 1; font-size: 1.1rem; }
+.month { max-width: 440px; margin: 0 auto; }
 .month h3 { font-size: .9rem; margin-bottom: 4px; }
-.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .dow { font-size: .7rem; color: var(--muted); text-align: center; }
-.day { aspect-ratio: 1; min-height: 28px; border: 2px solid transparent; border-radius: 6px; background: transparent; font-size: .78rem; padding: 0; }
+.day { aspect-ratio: 1; min-height: 40px; border: 2px solid transparent; border-radius: 6px; background: transparent; font-size: .95rem; padding: 0; }
 .day.s-done { background: var(--done); color: var(--done-t); }
 .day.s-part { background: var(--part); color: var(--part-t); }
 .day.s-miss { background: var(--miss); color: var(--miss-t); }
@@ -103,6 +103,24 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 <script>
 'use strict';
 (function () {
+  // ===== НАСТРОЙКА ОБЩЕЙ БАЗЫ (Firebase Firestore) =====
+  // Вставьте вместо слов «ВСТАВЬТЕ» значения firebaseConfig из консоли Firebase.
+  // Пока ключи не заполнены, сайт работает локально (данные только в этом браузере).
+  var FIREBASE_CONFIG = {
+    apiKey: 'ВСТАВЬТЕ',
+    authDomain: 'ВСТАВЬТЕ',
+    projectId: 'ВСТАВЬТЕ',
+    appId: 'ВСТАВЬТЕ'
+  };
+  // Секретный код семьи: все устройства с одним кодом видят одни и те же данные.
+  var FAMILY_CODE = 'I4GBtJ71V3UaWTTmBKzMjdmd';
+  // =====================================================
+
+  var FB_VERSION = '10.12.2';
+  var SHARED = FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.projectId.indexOf('ВСТАВЬТЕ') < 0 &&
+    FIREBASE_CONFIG.apiKey.indexOf('ВСТАВЬТЕ') < 0;
+  var fb = null; // { db, doc, setDoc, deleteField, onSnapshot, collection }
+
   var STORE_KEY = 'chores:v1';
   var ME_KEY = 'chores:me';
   var EPOCH = Date.UTC(2020, 0, 6); // понедельник
@@ -157,9 +175,61 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   }
 
   // ---------- Состояние ----------
-  var data = load();
+  var data = SHARED ? { config: null, done: {} } : load();
   var now = todayParts();
-  var state = { year: now.y, sel: dkey(now.y, now.m, now.d), forceWelcome: false, notice: '' };
+  var state = { sel: dkey(now.y, now.m, now.d), forceWelcome: false, notice: '', shared: SHARED, loading: SHARED };
+  var logDocs = {}; // YYYY-MM -> { key: true }
+
+  // ---------- Общая база ----------
+  function ymOf(k) { return k.slice(0, 7); }
+  function rebuildDone() {
+    var all = {};
+    Object.keys(logDocs).forEach(function (ym) { Object.keys(logDocs[ym]).forEach(function (k) { if (logDocs[ym][k]) all[k] = true; }); });
+    data.done = all;
+  }
+  function fbFail(msg) {
+    // Нет связи с базой: переходим на локальные данные, чтобы сайт оставался рабочим.
+    state.shared = false; state.loading = false;
+    data = load();
+    state.notice = msg;
+    render();
+  }
+  function connectShared() {
+    Promise.all([
+      import('https://www.gstatic.com/firebasejs/' + FB_VERSION + '/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/' + FB_VERSION + '/firebase-firestore.js')
+    ]).then(function (m) {
+      var app = m[0].initializeApp(FIREBASE_CONFIG);
+      var f = m[1];
+      fb = { db: f.getFirestore(app), doc: f.doc, collection: f.collection, setDoc: f.setDoc, deleteField: f.deleteField, onSnapshot: f.onSnapshot };
+      var base = ['families', FAMILY_CODE];
+      fb.onSnapshot(fb.doc.apply(null, [fb.db].concat(base, ['app', 'config'])), function (snap) {
+        data.config = snap.exists() ? snap.data() : null;
+        state.loading = false;
+        render();
+      }, function () { fbFail('Нет связи с общей базой, показаны данные только этого устройства.'); });
+      fb.onSnapshot(fb.collection.apply(null, [fb.db].concat(base, ['log'])), function (snap) {
+        logDocs = {};
+        snap.forEach(function (d) { logDocs[d.id] = (d.data() || {}).done || {}; });
+        rebuildDone();
+        render();
+      }, function () { fbFail('Нет связи с общей базой, показаны данные только этого устройства.'); });
+    }).catch(function () { fbFail('Не удалось загрузить библиотеку базы, показаны данные только этого устройства.'); });
+  }
+
+  function writeConfig(cfg) {
+    if (!state.shared) { data.config = cfg; return Promise.resolve(save(data)); }
+    return fb.setDoc(fb.doc(fb.db, 'families', FAMILY_CODE, 'app', 'config'), cfg).then(function () { return true; });
+  }
+  function writeDone(key, value) {
+    if (!state.shared) {
+      if (value) data.done[key] = true; else delete data.done[key];
+      return Promise.resolve(save(data));
+    }
+    var patch = {}; patch[key] = value ? true : fb.deleteField();
+    return fb.setDoc(fb.doc(fb.db, 'families', FAMILY_CODE, 'log', ymOf(key.split('_')[1])), { done: patch }, { merge: true })
+      .then(function () { return true; });
+  }
   var app = document.getElementById('app');
   var dlg = document.getElementById('settings');
 
@@ -202,7 +272,9 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
     if (cfg && me && cfg.members.indexOf(me) < 0) { setMe(null); me = null; }
     var html = '';
 
-    if (!cfg) {
+    if (state.loading) {
+      html += '<div class="card welcome"><p class="empty" role="status">Загружаем данные семьи…</p></div>';
+    } else if (!cfg) {
       html += '<div class="top"><h1 class="greet">Домашняя очередь</h1>' + settingsBtn() + '</div>' +
         '<div class="card welcome"><h2>Начните с настроек</h2>' +
         '<p class="empty">Добавьте людей и домашние дела, а очередь посчитается сама.</p>' +
@@ -216,9 +288,9 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
     } else {
       html += '<div class="top"><div><p class="greet">' + greeting(me) + '</p>' +
         '<p class="sub"><button data-act="notme">Это не вы?</button></p></div>' + settingsBtn() + '</div>';
-      if (!storageOk) html += '<div class="notice" role="status">Браузер не даёт сохранять данные: после закрытия страницы всё пропадёт.</div>';
+      if (!state.shared && !storageOk) html += '<div class="notice" role="status">Браузер не даёт сохранять данные: после закрытия страницы всё пропадёт.</div>';
       if (state.notice) html += '<div class="notice" role="alert">' + esc(state.notice) + '</div>';
-      html += '<div class="notice">Данные хранятся только в этом браузере и не видны другим устройствам.</div>';
+      if (!state.shared) html += '<div class="notice">Общая база не подключена: данные хранятся только в этом браузере и не видны другим устройствам.</div>';
       html += dayCard(me) + calendarCard() + statsCard();
     }
     var focus = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-keep');
@@ -260,34 +332,27 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   }
 
   function calendarCard() {
-    var y = state.year;
-    var h = '<section class="card"><div class="yearbar">' +
-      '<button class="icon-btn" data-act="year" data-d="-1" aria-label="Предыдущий год">←</button>' +
-      '<strong>' + y + '</strong>' +
-      '<button class="icon-btn" data-act="year" data-d="1" aria-label="Следующий год">→</button>' +
-      '<button class="btn ghost" data-act="today">Сегодня</button></div><div class="months">';
-    for (var m = 0; m < 12; m++) {
-      var first = mod(dayNum(y, m, 1), 7);
-      var count = new Date(y, m + 1, 0).getDate();
-      h += '<div class="month"><h3>' + MONTHS[m] + '</h3><div class="grid">';
-      WD.forEach(function (w) { h += '<div class="dow">' + w + '</div>'; });
-      for (var i = 0; i < first; i++) h += '<div></div>';
-      for (var d = 1; d <= count; d++) {
-        var k = dkey(y, m, d);
-        var cls = 'day ' + statusOf(y, m, d);
-        if (y === now.y && m === now.m && d === now.d) cls += ' today';
-        if (k === state.sel) cls += ' sel';
-        h += '<button class="' + cls + '" data-act="day" data-k="' + k + '" aria-label="' + d + ' ' + MONTHS_GEN[m] + '">' + d + '</button>';
-      }
-      h += '</div></div>';
+    var y = now.y, m = now.m;
+    var first = mod(dayNum(y, m, 1), 7);
+    var count = new Date(y, m + 1, 0).getDate();
+    var h = '<section class="card"><div class="yearbar"><strong>' + MONTHS[m] + ' ' + y + '</strong>' +
+      '<button class="btn ghost" data-act="today">Сегодня</button></div><div class="month"><div class="grid">';
+    WD.forEach(function (w) { h += '<div class="dow">' + w + '</div>'; });
+    for (var i = 0; i < first; i++) h += '<div></div>';
+    for (var d = 1; d <= count; d++) {
+      var k = dkey(y, m, d);
+      var cls = 'day ' + statusOf(y, m, d);
+      if (d === now.d) cls += ' today';
+      if (k === state.sel) cls += ' sel';
+      h += '<button class="' + cls + '" data-act="day" data-k="' + k + '" aria-label="' + d + ' ' + MONTHS_GEN[m] + '">' + d + '</button>';
     }
-    return h + '</div><div class="legend">' +
+    return h + '</div></div><div class="legend">' +
       '<span><i style="background:var(--done)"></i>всё сделано</span><span><i style="background:var(--part)"></i>частично</span>' +
       '<span><i style="background:var(--miss)"></i>пропущено</span><span><i style="background:var(--future)"></i>впереди</span></div></section>';
   }
 
   function statsCard() {
-    var cfg = data.config, y = state.year;
+    var cfg = data.config, me = getMe(), y = now.y;
     var stats = {};
     cfg.members.forEach(function (n) { stats[n] = { a: 0, d: 0 }; });
     var end = y < now.y ? new Date(y, 11, 31) : y === now.y ? new Date(now.y, now.m, now.d) : null;
@@ -303,7 +368,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
     var h = '<section class="card"><h2>Статистика за ' + y + '</h2>';
     cfg.members.forEach(function (n) {
       var s = stats[n], pct = s.a ? Math.round(s.d * 100 / s.a) : 0;
-      h += '<div class="stat"><div class="row"><span><span class="dot" style="background:' + colorOf(n) + '"></span>' + esc(n) +
+      h += '<div class="stat"><div class="row"><span><span class="dot" style="background:' + colorOf(n) + '"></span>' + esc(n) + (n === me ? ' (вы)' : '') +
         '</span><span>' + s.d + ' из ' + s.a + (s.a ? ' · ' + pct + '%' : '') + '</span></div>' +
         '<div class="bar" role="img" aria-label="' + esc(n) + ': ' + pct + '%"><span style="width:' + pct + '%;background:' + colorOf(n) + '"></span></div></div>';
     });
@@ -376,24 +441,22 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
     var err = validate();
     if (err) return drawSettings(err);
     var oldMe = getMe();
-    data.config = {
+    var cfgNew = {
       members: draft.members.map(function (n) { return n.trim(); }).filter(Boolean),
       chores: draft.chores.filter(function (c) { return c.name.trim(); }).map(function (c) {
         return { id: c.id, name: c.name.trim(), days: c.days.slice().sort(function (a, b) { return a - b; }) };
       })
     };
-    if (!save(data)) state.notice = 'Не удалось сохранить данные в браузере.';
-    else state.notice = '';
-    if (oldMe && data.config.members.indexOf(oldMe) < 0) setMe(null);
+    if (oldMe && cfgNew.members.indexOf(oldMe) < 0) setMe(null);
     dlg.close();
-    render();
+    writeConfig(cfgNew).then(function (ok) {
+      state.notice = ok ? '' : 'Не удалось сохранить настройки.'; render();
+    }).catch(function () { state.notice = 'Не удалось сохранить настройки в общей базе. Проверьте связь и попробуйте ещё раз.'; render(); });
+    if (!state.shared) render();
   }
 
   // ---------- События ----------
-  function selectDay(k) {
-    state.sel = k;
-    state.year = parseKey(k).y;
-  }
+  function selectDay(k) { state.sel = k; }
 
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
@@ -417,9 +480,8 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
         break;
       case 'pick': setMe(el.getAttribute('data-name')); state.forceWelcome = false; render(); break;
       case 'notme': state.forceWelcome = true; render(); break;
-      case 'year': state.year += +el.getAttribute('data-d'); render(); break;
       case 'today':
-        state.year = now.y; selectDay(dkey(now.y, now.m, now.d)); render(); break;
+        selectDay(dkey(now.y, now.m, now.d)); render(); break;
       case 'day':
         selectDay(el.getAttribute('data-k')); render();
         var card = document.getElementById('daycard');
@@ -431,9 +493,10 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
         if (!task || task.who !== me) break;
         if (dayNum(p.y, p.m, p.d) > dayNum(now.y, now.m, now.d)) break;
         var key = id + '_' + state.sel;
-        if (data.done[key]) delete data.done[key]; else data.done[key] = true;
-        state.notice = save(data) ? '' : 'Не удалось сохранить отметку. Попробуйте ещё раз.';
-        render();
+        writeDone(key, !data.done[key]).then(function (ok) {
+          state.notice = ok ? '' : 'Не удалось сохранить отметку. Попробуйте ещё раз.'; render();
+        }).catch(function () { state.notice = 'Не удалось сохранить отметку в общей базе. Проверьте связь и попробуйте ещё раз.'; render(); });
+        if (!state.shared) render();
         break;
     }
   });
@@ -441,11 +504,12 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   dlg.addEventListener('close', function () { draft = null; });
 
   render();
+  if (SHARED) connectShared();
   // Обновляем «сегодня» при возврате на вкладку (например, наутро).
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && !dlg.open) {
       var t = todayParts();
-      if (t.d !== now.d || t.m !== now.m) { state.sel = dkey(t.y, t.m, t.d); state.year = t.y; }
+      if (t.d !== now.d || t.m !== now.m) state.sel = dkey(t.y, t.m, t.d);
       render();
     }
   });
